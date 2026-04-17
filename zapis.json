@@ -8,15 +8,6 @@
       "platoon": 721,
       "day_name": "Понедельник",
       "time": "17.04.2026 01:06:40"
-    },
-    {
-      "surname": "ъуй",
-      "user_id": 1531814351,
-      "username": "aleshkalepecka",
-      "first_name": "Aleksis",
-      "platoon": 721,
-      "day_name": "Понедельник",
-      "time": "17.04.2026 01:07:15"
     }
   ],
   "tuesday": [
@@ -30,7 +21,17 @@
       "time": "17.04.2026 00:37:06"
     }
   ],
-  "wednesday": [],
+  "wednesday": [
+    {
+      "surname": "хуй",
+      "user_id": 1531814351,
+      "username": "aleshkalepecka",
+      "first_name": "Aleksis",
+      "platoon": 721,
+      "day_name": "Среда",
+      "time": "17.04.2026 23:17:55"
+    }
+  ],
   "thursday": [],
   "friday": [
     {

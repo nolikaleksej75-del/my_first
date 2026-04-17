@@ -196,7 +196,6 @@ def save_settings(settings):
 
 # ============ ФУНКЦИИ РАССЫЛКИ ============
 def send_broadcast(message_text, sender_id):
-    """Отправляет сообщение всем пользователям"""
     users = load_users()
     success_count = 0
     fail_count = 0
@@ -205,12 +204,11 @@ def send_broadcast(message_text, sender_id):
         try:
             bot.send_message(user['id'], message_text, parse_mode='Markdown')
             success_count += 1
-            time.sleep(0.05)  # Задержка чтобы не превысить лимиты Telegram
+            time.sleep(0.05)
         except Exception as e:
             fail_count += 1
             print(f"Не удалось отправить пользователю {user['id']}: {e}")
     
-    # Отправляем отчет администратору
     report = (
         f"✅ **Рассылка завершена!**\n\n"
         f"📨 **Отправлено:** {success_count} пользователям\n"
@@ -319,7 +317,7 @@ def admin_keyboard():
         InlineKeyboardButton("👥 Управление командирами", callback_data="admin_commanders"),
         InlineKeyboardButton("⭐ Управление старшиной", callback_data="admin_starhina"),
         InlineKeyboardButton("🔔 Закрыть запись на день", callback_data="admin_close_day"),
-        InlineKeyboardButton("📢 Сделать рассылку", callback_data="admin_broadcast")  # НОВАЯ КНОПКА
+        InlineKeyboardButton("📢 Сделать рассылку", callback_data="admin_broadcast")
     )
     kb.add(InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu"))
     return kb
@@ -409,7 +407,6 @@ def start_command(message):
         bot.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu_keyboard())
     except Exception as e:
         print(f"Ошибка в start: {e}")
-        traceback.print_exc()
 
 @bot.message_handler(commands=['myid'])
 def myid_command(message):
@@ -468,87 +465,153 @@ def set_commander_command(message):
     except:
         bot.send_message(message.chat.id, "❌ Ошибка ввода")
 
-# ============ ОБРАБОТЧИК ДЛЯ РАССЫЛКИ ============
-@bot.message_handler(content_types=['text'])
-def broadcast_message_handler(message):
-    """Обработчик для получения текста рассылки от администратора"""
-    if not is_admin(message.from_user.id):
-        return
-    
-    # Проверяем, находится ли админ в режиме рассылки
-    if not hasattr(broadcast_message_handler, 'waiting_for_broadcast'):
-        return
-    
-    if broadcast_message_handler.waiting_for_broadcast.get(message.from_user.id):
-        # Получаем текст сообщения
-        msg_text = message.text
-        broadcast_message_handler.waiting_for_broadcast[message.from_user.id] = False
-        
-        # Отправляем подтверждение
-        confirm_kb = InlineKeyboardMarkup(row_width=2)
-        confirm_kb.add(
-            InlineKeyboardButton("✅ ДА, ОТПРАВИТЬ", callback_data=f"confirm_broadcast_{message.message_id}"),
-            InlineKeyboardButton("❌ ОТМЕНА", callback_data="admin_back")
-        )
-        
-        # Сохраняем текст для отправки
-        broadcast_message_handler.pending_broadcast = {
-            'user_id': message.from_user.id,
-            'text': msg_text,
-            'msg_id': message.message_id
-        }
-        
-        bot.send_message(
-            message.chat.id,
-            f"📢 **Предпросмотр сообщения для рассылки:**\n\n{msg_text}\n\n"
-            f"⚠️ **Внимание!** Сообщение получат ВСЕ пользователи бота.\n\n"
-            f"Отправить?",
-            parse_mode='Markdown',
-            reply_markup=confirm_kb
-        )
-
-# Инициализация словаря для ожидания рассылки
-broadcast_message_handler.waiting_for_broadcast = {}
-broadcast_message_handler.pending_broadcast = None
-
 # ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 def add_commander(msg, platoon, orig_msg):
     try:
         if not is_admin(msg.from_user.id):
             return
-        cid = int(msg.text.strip())
-        if cid not in DATA_STRUCTURE['commanders'][platoon]:
-            DATA_STRUCTURE['commanders'][platoon].append(cid)
+        
+        # Получаем и очищаем текст
+        user_input = msg.text.strip()
+        
+        # Если есть пробел, берем первую часть
+        if ' ' in user_input:
+            user_input = user_input.split()[0]
+        
+        # Удаляем @ если есть
+        if user_input.startswith('@'):
+            user_input = user_input[1:]
+        
+        # Проверяем, что осталось только число
+        if not user_input.isdigit():
+            bot.send_message(
+                msg.chat.id, 
+                f"❌ **Ошибка!**\n\n"
+                f"Вы отправили: `{msg.text}`\n"
+                f"А нужно отправить ТОЛЬКО число - ID пользователя.\n\n"
+                f"✅ **Правильно:** `1531814351`\n\n"
+                f"💡 **Как узнать ID?** Попросите пользователя отправить команду /myid",
+                parse_mode='Markdown'
+            )
+            return
+        
+        commander_id = int(user_input)
+        
+        # ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ КЛЮЧА
+        if platoon not in DATA_STRUCTURE['commanders']:
+            DATA_STRUCTURE['commanders'][platoon] = []
+        
+        if commander_id not in DATA_STRUCTURE['commanders'][platoon]:
+            DATA_STRUCTURE['commanders'][platoon].append(commander_id)
             save_commanders_data()
+            
             try:
-                bot.send_message(cid, f"🎖️ Вы командир {PLATOONS[platoon]}! /commander")
-            except:
-                pass
-            bot.send_message(msg.chat.id, f"✅ Командир добавлен: `{cid}`", parse_mode='Markdown')
+                bot.send_message(
+                    commander_id,
+                    f"🎖️ **Поздравляем!**\n\nВы назначены командиром **{PLATOONS[platoon]}**!\n\n"
+                    f"Теперь вам доступна команда /commander",
+                    parse_mode='Markdown'
+                )
+                bot.send_message(msg.chat.id, f"✅ Уведомление отправлено командиру!")
+            except Exception as e:
+                bot.send_message(
+                    msg.chat.id, 
+                    f"⚠️ Командир добавлен, но не удалось отправить уведомление.\n"
+                    f"Пользователь должен сначала написать боту /start\n\nОшибка: {e}"
+                )
+            
+            bot.send_message(
+                msg.chat.id,
+                f"✅ Командир для {PLATOONS[platoon]} добавлен!\n🆔 ID: `{commander_id}`",
+                parse_mode='Markdown'
+            )
         else:
-            bot.send_message(msg.chat.id, "❌ Уже командир")
-        bot.send_message(orig_msg.chat.id, f"👥 **Управление {PLATOONS[platoon]}**", parse_mode='Markdown', reply_markup=manage_platoon_keyboard(platoon))
-    except:
-        bot.send_message(msg.chat.id, "❌ Ошибка: нужно число")
+            bot.send_message(
+                msg.chat.id, 
+                f"❌ Пользователь с ID `{commander_id}` уже является командиром {PLATOONS[platoon]}!",
+                parse_mode='Markdown'
+            )
+        
+        # Возвращаемся в меню управления взводом
+        bot.send_message(
+            orig_msg.chat.id,
+            f"👥 **Управление {PLATOONS[platoon]}**",
+            parse_mode='Markdown',
+            reply_markup=manage_platoon_keyboard(platoon)
+        )
+        
+    except Exception as e:
+        print(f"Ошибка в add_commander: {e}")
+        traceback.print_exc()
+        bot.send_message(msg.chat.id, f"❌ Критическая ошибка: {str(e)}")
 
 def add_starhina(msg, orig_msg):
     try:
         if not is_admin(msg.from_user.id):
             return
-        sid = int(msg.text.strip())
+        
+        user_input = msg.text.strip()
+        
+        if ' ' in user_input:
+            user_input = user_input.split()[0]
+        
+        if user_input.startswith('@'):
+            user_input = user_input[1:]
+        
+        if not user_input.isdigit():
+            bot.send_message(
+                msg.chat.id, 
+                f"❌ **Ошибка!**\n\n"
+                f"Вы отправили: `{msg.text}`\n"
+                f"А нужно отправить ТОЛЬКО число - ID пользователя.\n\n"
+                f"✅ **Правильно:** `1531814351`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        sid = int(user_input)
+        
         if sid not in DATA_STRUCTURE['starhina']:
             DATA_STRUCTURE['starhina'].append(sid)
             save_commanders_data()
+            
             try:
-                bot.send_message(sid, "⭐ Вы назначены старшиной курса!\n/commander")
+                bot.send_message(
+                    sid,
+                    f"⭐ **Поздравляем!**\n\nВы назначены **Старшиной курса**!\n\n"
+                    f"Теперь вам доступна команда /commander для управления записями ВСЕХ взводов.",
+                    parse_mode='Markdown'
+                )
+                bot.send_message(msg.chat.id, f"✅ Уведомление отправлено старшине!")
             except:
-                pass
-            bot.send_message(msg.chat.id, f"✅ Старшина добавлен: `{sid}`", parse_mode='Markdown')
+                bot.send_message(
+                    msg.chat.id, 
+                    f"⚠️ Старшина добавлен, но не удалось отправить уведомление.\n"
+                    f"Пользователь должен сначала написать боту /start"
+                )
+            
+            bot.send_message(
+                msg.chat.id,
+                f"✅ Старшина добавлен!\n🆔 ID: `{sid}`",
+                parse_mode='Markdown'
+            )
         else:
-            bot.send_message(msg.chat.id, "❌ Уже старшина")
-        bot.send_message(orig_msg.chat.id, "⭐ **Управление старшиной**", parse_mode='Markdown', reply_markup=admin_starhina_keyboard())
-    except:
-        bot.send_message(msg.chat.id, "❌ Ошибка: нужно число")
+            bot.send_message(
+                msg.chat.id, 
+                f"❌ Пользователь с ID `{sid}` уже является старшиной!",
+                parse_mode='Markdown'
+            )
+        
+        bot.send_message(
+            orig_msg.chat.id,
+            "⭐ **Управление старшиной курса**",
+            parse_mode='Markdown',
+            reply_markup=admin_starhina_keyboard()
+        )
+        
+    except Exception as e:
+        print(f"Ошибка в add_starhina: {e}")
+        bot.send_message(msg.chat.id, f"❌ Ошибка: {str(e)}")
 
 def process_surname(message):
     try:
@@ -626,6 +689,39 @@ def process_remove_reason(message):
         print(f"Ошибка удаления: {e}")
         bot.send_message(message.chat.id, "❌ Ошибка при удалении")
 
+# ============ ОБРАБОТЧИК ДЛЯ РАССЫЛКИ ============
+broadcast_waiting = {}
+
+@bot.message_handler(func=lambda message: message.text and not message.text.startswith('/'))
+def handle_broadcast_input(message):
+    if not is_admin(message.from_user.id):
+        return
+    
+    if broadcast_waiting.get(message.from_user.id):
+        msg_text = message.text
+        broadcast_waiting[message.from_user.id] = False
+        
+        confirm_kb = InlineKeyboardMarkup(row_width=2)
+        confirm_kb.add(
+            InlineKeyboardButton("✅ ДА, ОТПРАВИТЬ", callback_data=f"confirm_broadcast_{message.message_id}"),
+            InlineKeyboardButton("❌ ОТМЕНА", callback_data="admin_back")
+        )
+        
+        broadcast_waiting['pending'] = {
+            'user_id': message.from_user.id,
+            'text': msg_text,
+            'msg_id': message.message_id
+        }
+        
+        bot.send_message(
+            message.chat.id,
+            f"📢 **Предпросмотр сообщения для рассылки:**\n\n{msg_text}\n\n"
+            f"⚠️ **Внимание!** Сообщение получат ВСЕ пользователи бота.\n\n"
+            f"Отправить?",
+            parse_mode='Markdown',
+            reply_markup=confirm_kb
+        )
+
 # ============ CALLBACK ============
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
@@ -693,25 +789,23 @@ def callback_handler(call):
                 return
             
             bot.answer_callback_query(call.id)
-            broadcast_message_handler.waiting_for_broadcast[call.from_user.id] = True
+            broadcast_waiting[call.from_user.id] = True
             bot.send_message(
                 call.message.chat.id,
                 "📢 **Режим рассылки**\n\n"
                 "Отправьте текст сообщения, которое хотите разослать ВСЕМ пользователям бота.\n\n"
                 "⚠️ **Внимание!** Сообщение получат все, кто когда-либо писал /start.\n\n"
-                "📝 Просто напишите текст сообщения в этот чат.\n\n"
-                "❌ Для отмены отправьте /cancel"
+                "📝 Просто напишите текст сообщения в этот чат."
             )
 
-        # Подтверждение рассылки
         elif call.data.startswith("confirm_broadcast_"):
             if not is_admin(call.from_user.id):
                 bot.answer_callback_query(call.id, "⛔ Доступ запрещен!")
                 return
             
-            if broadcast_message_handler.pending_broadcast:
-                msg_text = broadcast_message_handler.pending_broadcast['text']
-                user_id = broadcast_message_handler.pending_broadcast['user_id']
+            if broadcast_waiting.get('pending'):
+                msg_text = broadcast_waiting['pending']['text']
+                user_id = broadcast_waiting['pending']['user_id']
                 
                 bot.edit_message_text(
                     "📢 **Начинаю рассылку...**\n\n⏳ Пожалуйста, подождите.",
@@ -720,14 +814,11 @@ def callback_handler(call):
                     parse_mode='Markdown'
                 )
                 
-                # Отправляем рассылку
                 send_broadcast(msg_text, user_id)
                 
-                # Очищаем ожидание
-                broadcast_message_handler.waiting_for_broadcast[call.from_user.id] = False
-                broadcast_message_handler.pending_broadcast = None
+                broadcast_waiting[call.from_user.id] = False
+                broadcast_waiting['pending'] = None
                 
-                # Возвращаемся в админ-панель
                 bot.send_message(call.message.chat.id, "👑 **Панель администратора**", parse_mode='Markdown', reply_markup=admin_keyboard())
                 bot.answer_callback_query(call.id, "✅ Рассылка завершена!")
 
@@ -859,7 +950,7 @@ def callback_handler(call):
             pl = int(call.data.split('_')[-1])
             bot.answer_callback_query(call.id)
             msg = bot.send_message(call.message.chat.id,
-                                   f"➕ **Добавить командира для {PLATOONS[pl]}**\nОтправьте ID (только цифры):",
+                                   f"➕ **Добавить командира для {PLATOONS[pl]}**\n\nОтправьте ID (только цифры):\n\nПример: `1531814351`",
                                    parse_mode='Markdown')
             bot.register_next_step_handler(msg, lambda m: add_commander(m, pl, call.message))
 
@@ -886,7 +977,7 @@ def callback_handler(call):
             if not is_admin(call.from_user.id):
                 return
             bot.answer_callback_query(call.id)
-            msg = bot.send_message(call.message.chat.id, "⭐ **Добавить старшину**\nОтправьте ID:", parse_mode='Markdown')
+            msg = bot.send_message(call.message.chat.id, "⭐ **Добавить старшину**\n\nОтправьте ID (только цифры):\n\nПример: `1531814351`", parse_mode='Markdown')
             bot.register_next_step_handler(msg, lambda m: add_starhina(m, call.message))
 
         elif call.data.startswith("remove_starhina_"):
@@ -938,12 +1029,27 @@ if __name__ == '__main__':
         bot.remove_webhook()
         time.sleep(1)
 
+        # Удаляем старый проблемный файл commanders.json если он есть
+        if os.path.exists(COMMANDERS_FILE):
+            try:
+                with open(COMMANDERS_FILE, 'r', encoding='utf-8') as f:
+                    test = json.load(f)
+                if 'commanders' not in test or 'starhina' not in test:
+                    print("⚠️ Обнаружен старый формат commanders.json, удаляем...")
+                    os.remove(COMMANDERS_FILE)
+            except:
+                if os.path.exists(COMMANDERS_FILE):
+                    os.remove(COMMANDERS_FILE)
+
         if not os.path.exists(SETTINGS_FILE):
             save_settings({day: True for day in DAYS_RU.keys()})
+            print("✅ Создан файл настроек")
         if not os.path.exists(DATA_FILE):
             save_data({day: [] for day in DAYS_RU.keys()})
+            print("✅ Создан файл данных")
         if not os.path.exists(USERS_FILE):
             save_users([])
+            print("✅ Создан файл пользователей")
 
         load_commanders_data()
 
@@ -951,13 +1057,15 @@ if __name__ == '__main__':
         print("🤖 БОТ ЗАПУЩЕН")
         print(f"👑 Админ ID: {ADMIN_ID}")
         print("=" * 50)
-        print("\n📢 Новая функция: массовая рассылка сообщений всем пользователям")
-        print("   В админ-панели: кнопка '📢 Сделать рассылку'")
+        print("\n📢 Функции:")
+        print("   • Массовая рассылка сообщений")
+        print("   • Управление командирами")
+        print("   • Управление днями записи")
         print("=" * 50)
         
         bot.infinity_polling(timeout=60)
     except KeyboardInterrupt:
-        print("\nБот остановлен")
+        print("\n⚠️ Бот остановлен")
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"❌ Ошибка: {e}")
         traceback.print_exc()
