@@ -8,7 +8,7 @@ import time
 import requests
 
 # ============ КОНФИГУРАЦИЯ ============
-TOKEN = '8625237309:AAH3fu1rohFpxR6GuQWCGuRnisLcjb-GpM8'
+TOKEN = '8717752281:AAFcE_fNSLQHoFgEY8EYV0dVnp5wlqwZGpU'
 ADMIN_ID = 1531814351
 
 bot = telebot.TeleBot(TOKEN)
